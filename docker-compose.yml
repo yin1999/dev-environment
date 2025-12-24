@@ -1,0 +1,114 @@
+services:
+  db:
+    image: mysql
+    environment:
+      MYSQL_USER: gw_user
+      MYSQL_PASSWORD: gw_pass
+      MYSQL_DATABASE: gw
+      MYSQL_RANDOM_ROOT_PASSWORD: yes
+    ports:
+      - "3306:3306"
+    command:
+      - "--character-set-server=utf8mb4"
+      - "--collation-server=utf8mb4_unicode_ci"
+    networks:
+      - app-network
+
+  redis-cluster:
+    image: redis
+    # ports:
+    #   - "6380-6382:6380-6382"
+    volumes:
+      - ./config/redis:/redis-conf:ro
+    networks:
+      - app-network
+    command: bash /redis-conf/start.sh
+    healthcheck:
+      test: ["CMD", "/bin/bash", "/redis-conf/healthcheck.sh", "6380", "6381", "6382"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis-cluster-init:
+    image: redis
+    depends_on:
+      "redis-cluster":
+        condition: service_healthy
+    command: >
+      sh -c "
+        if ! redis-cli -h redis-cluster -p 6380 cluster info | grep -q 'cluster_state:ok'; then
+          echo 'Creating Redis cluster...'
+          redis-cli --cluster create redis-cluster:6380 redis-cluster:6381 redis-cluster:6382 --cluster-replicas 0 --cluster-yes
+        else
+          echo 'Redis cluster already exists'
+        fi
+      "
+    networks:
+      - app-network
+
+  redis-proxy:
+    image: envoyproxy/envoy:v1.36-latest
+    ports:
+      - "6379:6380"  # 代理端口
+    volumes:
+      - ./config/envoy/envoy.yaml:/etc/envoy/envoy.yaml:ro
+    depends_on:
+      redis-cluster-init:
+        condition: service_completed_successfully
+    networks:
+      - app-network
+    command: ["/usr/local/bin/envoy", "-c", "/etc/envoy/envoy.yaml", "-l", "info"]
+
+  socks5-proxy:
+    image: xkuma/socks5
+    ports:
+      - "10080:1080"
+    networks:
+      - app-network
+
+  kafka:
+    image: apache/kafka:3.9.1 # 不能用v4（用的老版本kafka-go暂时不支持v4协议）
+    hostname: kafka
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT'
+      KAFKA_ADVERTISED_LISTENERS: 'EXTERNAL://localhost:9092,INTERNAL://kafka:19092'
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:29093'
+      KAFKA_LISTENERS: 'CONTROLLER://:29093,EXTERNAL://:9092,INTERNAL://:19092'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'INTERNAL'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_LOG_RETENTION_HOURS: 168 # 7 days
+      CLUSTER_ID: '4L6g3nShT-eMCtK--X86sw'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_OFFSETS_TOPIC_NUM_PARTITIONS: 3
+      KAFKA_SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR: 1
+    ports:
+      - "9092:9092"
+    networks:
+      - app-network
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    ports:
+      - 9095:8080
+    environment:
+      DYNAMIC_CONFIG_ENABLED: 'true'
+      KAFKA_CLUSTERS_0_NAME: 'local'
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: 'kafka:19092'
+    volumes:
+      - ./config/kafka-ui/config.yml:/etc/kafkaui/dynamic_config.yaml
+    depends_on:
+      - kafka
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
