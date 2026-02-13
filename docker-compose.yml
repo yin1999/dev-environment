@@ -1,6 +1,6 @@
 services:
   db:
-    image: mysql
+    image: ubuntu/mysql
     environment:
       MYSQL_USER: gw_user
       MYSQL_PASSWORD: gw_pass
