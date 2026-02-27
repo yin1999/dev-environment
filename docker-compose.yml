@@ -71,12 +71,10 @@ services:
     hostname: kafka
     command:
       - redpanda start
+      - --mode dev-container
       - --smp 1
       - --memory 1G
-      - --reserve-memory 0M
-      - --overprovisioned
       - --node-id 0
-      - --check=false
       - --kafka-addr internal://0.0.0.0:19092,external://0.0.0.0:9092
       - --advertise-kafka-addr internal://kafka:19092,external://localhost:9092
     ports:
