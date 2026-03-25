@@ -25,13 +25,12 @@ services:
     command: sh /redis-conf/start.sh
     healthcheck:
       test: ["CMD", "/bin/sh", "/redis-conf/healthcheck.sh", "6380", "6381", "6382"]
-      interval: 10s
+      interval: 4s
       timeout: 5s
       retries: 5
     post_start:
       - command: >
           sh -c "
-            /redis-conf/healthcheck.sh 6380 6381 6382
             if ! redis-cli -h redis-cluster -p 6380 cluster info | grep -q 'cluster_state:ok'; then
               echo 'Creating Redis cluster...'
               redis-cli --cluster create redis-cluster:6380 redis-cluster:6381 redis-cluster:6382 --cluster-replicas 0 --cluster-yes
@@ -49,6 +48,7 @@ services:
     depends_on:
       redis-cluster:
         condition: service_healthy
+        restart: true
     networks:
       - app-network
     command: ["-c", "/etc/envoy/envoy.yaml", "-l", "info"]
