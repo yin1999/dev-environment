@@ -15,22 +15,22 @@ services:
       - app-network
 
   redis-cluster:
-    image: redis
+    image: redis:alpine
     # ports:
     #   - "6380-6382:6380-6382"
     volumes:
       - ./config/redis:/redis-conf:ro
     networks:
       - app-network
-    command: bash /redis-conf/start.sh
+    command: sh /redis-conf/start.sh
     healthcheck:
-      test: ["CMD", "/bin/bash", "/redis-conf/healthcheck.sh", "6380", "6381", "6382"]
+      test: ["CMD", "/bin/sh", "/redis-conf/healthcheck.sh", "6380", "6381", "6382"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   redis-cluster-init:
-    image: redis
+    image: redis:alpine
     depends_on:
       "redis-cluster":
         condition: service_healthy
@@ -47,7 +47,7 @@ services:
       - app-network
 
   redis-proxy:
-    image: envoyproxy/envoy:v1.37-latest
+    image: envoyproxy/envoy:distroless-v1.37-latest
     ports:
       - "6379:6380"  # 代理端口
     volumes:
