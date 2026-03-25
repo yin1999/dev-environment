@@ -28,36 +28,30 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
-  redis-cluster-init:
-    image: redis:alpine
-    depends_on:
-      "redis-cluster":
-        condition: service_healthy
-    command: >
-      sh -c "
-        if ! redis-cli -h redis-cluster -p 6380 cluster info | grep -q 'cluster_state:ok'; then
-          echo 'Creating Redis cluster...'
-          redis-cli --cluster create redis-cluster:6380 redis-cluster:6381 redis-cluster:6382 --cluster-replicas 0 --cluster-yes
-        else
-          echo 'Redis cluster already exists'
-        fi
-      "
-    networks:
-      - app-network
+    post_start:
+      - command: >
+          sh -c "
+            /redis-conf/healthcheck.sh 6380 6381 6382
+            if ! redis-cli -h redis-cluster -p 6380 cluster info | grep -q 'cluster_state:ok'; then
+              echo 'Creating Redis cluster...'
+              redis-cli --cluster create redis-cluster:6380 redis-cluster:6381 redis-cluster:6382 --cluster-replicas 0 --cluster-yes
+            else
+              echo 'Redis cluster already exists'
+            fi
+          "
 
   redis-proxy:
-    image: envoyproxy/envoy:distroless-v1.37-latest
+    image: envoyproxy/envoy:v1.37-latest
     ports:
       - "6379:6380"  # 代理端口
     volumes:
       - ./config/envoy/envoy.yaml:/etc/envoy/envoy.yaml:ro
     depends_on:
-      redis-cluster-init:
-        condition: service_completed_successfully
+      redis-cluster:
+        condition: service_healthy
     networks:
       - app-network
-    command: ["/usr/local/bin/envoy", "-c", "/etc/envoy/envoy.yaml", "-l", "info"]
+    command: ["-c", "/etc/envoy/envoy.yaml", "-l", "info"]
 
   socks5-proxy:
     image: xkuma/socks5
