@@ -40,7 +40,7 @@ services:
           "
 
   redis-proxy:
-    image: envoyproxy/envoy:v1.37-latest
+    image: envoyproxy/envoy:v1.38-latest
     ports:
       - "6379:6380"  # 代理端口
     volumes:
