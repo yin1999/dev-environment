@@ -28,16 +28,6 @@ services:
       interval: 4s
       timeout: 5s
       retries: 5
-    post_start:
-      - command: >
-          sh -c "
-            if ! redis-cli -h redis-cluster -p 6380 cluster info | grep -q 'cluster_state:ok'; then
-              echo 'Creating Redis cluster...'
-              redis-cli --cluster create redis-cluster:6380 redis-cluster:6381 redis-cluster:6382 --cluster-replicas 0 --cluster-yes
-            else
-              echo 'Redis cluster already exists'
-            fi
-          "
 
   redis-proxy:
     image: envoyproxy/envoy:v1.38-latest
