@@ -1,0 +1,14 @@
+[Unit]
+Description=Dev Environment Docker Compose
+After=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+WorkingDirectory=%h/data/project_files/dev-environment
+ExecStart=/usr/bin/podman compose up -d
+ExecStop=/usr/bin/podman compose down
+Restart=no
+
+[Install]
+WantedBy=default.target
